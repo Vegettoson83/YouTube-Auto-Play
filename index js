@@ -1,15 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
-const axios = require('axios');
+const path = require('path');
 
 const API_KEY = process.env.YOUTUBE_API_KEY; // Secure API key loading
 
 const manifest = {
     id: 'community.youtube',
-    version: '1.1.0',
-    name: 'YouTube Auto-Play',
-    description: 'Watch YouTube videos directly in Stremio',
+    version: '1.2.0',
+    name: 'YouTube Auto-Play Plus',
+    description: 'Watch YouTube videos directly in Stremio with an embedded player',
     types: ['movie'],
     catalogs: [{ type: 'movie', id: 'youtube' }],
     resources: ['catalog', 'stream'],
@@ -18,66 +18,25 @@ const manifest = {
 
 const builder = new addonBuilder(manifest);
 
-// Fetch YouTube videos based on query or specific video ID
-async function fetchYouTubeVideos(query) {
-    if (query && query.startsWith('yt:')) {
-        const videoId = query.split(':')[1];
-        return fetchVideoById(videoId);
-    }
-    
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query || 'trending')}&key=${API_KEY}&maxResults=10`;
-    try {
-        const response = await axios.get(url);
-        return response.data.items.map(item => ({
-            id: `yt:${item.id.videoId}`,
-            name: item.snippet.title,
-            poster: item.snippet.thumbnails.high.url,
-            description: item.snippet.description
-        }));
-    } catch (error) {
-        console.error('YouTube API Error:', error.message);
-        return [];
-    }
-}
-
-// Fetch details for a specific YouTube video by ID
-async function fetchVideoById(videoId) {
-    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${API_KEY}`;
-    try {
-        const response = await axios.get(url);
-        const item = response.data.items[0];
-        return [{
-            id: `yt:${item.id}`,
-            name: item.snippet.title,
-            poster: item.snippet.thumbnails.high.url,
-            description: item.snippet.description
-        }];
-    } catch (error) {
-        console.error('YouTube Video Fetch Error:', error.message);
-        return [];
-    }
-}
-
-// Catalog Handler - Search for videos or fetch specific video by ID
-builder.defineCatalogHandler(({ id, extra }) => {
-    const query = extra.search || 'trending';
-    return fetchYouTubeVideos(query).then(movies => ({ metas: movies }));
-});
-
-// Stream Handler - Stream the video, either from a search result or a specific video
 builder.defineStreamHandler(({ id }) => {
     if (id.startsWith('yt:')) {
         const videoId = id.split(':')[1];
         return Promise.resolve({
-            streams: [{ url: `https://www.youtube.com/embed/${videoId}?autoplay=1` }]
+            streams: [{ url: `http://localhost:7000/embed/${videoId}` }]
         });
     }
     return Promise.resolve({ streams: [] });
 });
 
-// Start server
+// Start Express Server
 const app = express();
 app.use('/', builder.getInterface());
+
+// Serve the YouTube embed page
+app.get('/embed/:videoId', (req, res) => {
+    res.sendFile(path.join(__dirname, 'embed.html'));
+});
+
 const PORT = process.env.PORT || 7000;
 app.listen(PORT, () => {
     console.log(`YouTube Stremio Addon running at http://localhost:${PORT}/manifest.json`);
