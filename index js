@@ -1,14 +1,15 @@
+require('dotenv').config();
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
 const axios = require('axios');
 
-const API_KEY = 'YOUR_YOUTUBE_API_KEY'; // Replace with your actual API key
+const API_KEY = process.env.YOUTUBE_API_KEY; // Load API key securely
 
 const manifest = {
     id: 'community.youtube',
-    version: '1.0.0',
+    version: '1.1.0',
     name: 'YouTube Auto-Play',
-    description: 'Watch YouTube videos directly in Stremio',
+    description: 'Automatically play YouTube videos in Stremio',
     types: ['movie'],
     catalogs: [{ type: 'movie', id: 'youtube' }],
     resources: ['catalog', 'stream'],
@@ -34,20 +35,18 @@ async function fetchYouTubeVideos(query) {
     }
 }
 
-// Catalog Handler
-builder.defineCatalogHandler(({ id }) => {
-    if (id === 'youtube') {
-        return fetchYouTubeVideos('trending').then(movies => ({ metas: movies }));
-    }
-    return Promise.resolve({ metas: [] });
+// Catalog Handler - Allow searching for user-defined queries
+builder.defineCatalogHandler(({ id, extra }) => {
+    const query = extra.search || 'trending';
+    return fetchYouTubeVideos(query).then(movies => ({ metas: movies }));
 });
 
-// Stream Handler
+// Stream Handler - Embed YouTube videos for auto-play
 builder.defineStreamHandler(({ id }) => {
     if (id.startsWith('yt:')) {
         const videoId = id.split(':')[1];
         return Promise.resolve({
-            streams: [{ url: `https://www.youtube.com/watch?v=${videoId}` }]
+            streams: [{ url: `https://www.youtube.com/embed/${videoId}?autoplay=1` }]
         });
     }
     return Promise.resolve({ streams: [] });
@@ -60,3 +59,4 @@ const PORT = process.env.PORT || 7000;
 app.listen(PORT, () => {
     console.log(`YouTube Stremio Addon running at http://localhost:${PORT}/manifest.json`);
 });
+
